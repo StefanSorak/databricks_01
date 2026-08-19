@@ -1,4 +1,7 @@
-from pyspark.sql import DataFrame, functions as F
+from pyspark.sql import DataFrame, functions as F, Window
+from pyspark.sql.types import DecimalType
+
+MAX_RESOLUTION_YEARS = 5
 
 KEEP_COLUMNS = {
     # source_name -> silver_name
@@ -9,7 +12,7 @@ KEEP_COLUMNS = {
     "agency": "agency",
     "agency_name": "agency_name",
     "complaint_type": "complaint_type",
-    "descriptor": "descriptor",
+    "descriptor": "description",
     "borough": "borough",
     "status": "status",
     "open_data_channel_type": "intake_channel",
@@ -27,25 +30,63 @@ def select_and_rename(df: DataFrame) -> DataFrame:
 
 
 def normalize_strings(df: DataFrame) -> DataFrame:
-    null_values = [" ", "  ", "N/A", "Unspecified", "Unknown"]
+    sentinel_values = ["", "n/a", "unspecified", "unknown"]
+    timestamp_cols = ["created_at", "closed_at", "last_updated_at", "_ingested_at"]
 
-    df = df.select(
-        [F.lower(F.trim(F.col(c))).alias(c) for c in df.columns])
-    
     for c in df.columns:
-    
+        if c in timestamp_cols:
+            continue
+        cleaned = F.regexp_replace(F.trim(F.col(c)), r"\s+", " ")
+        is_sentinel = F.lower(cleaned).isin(sentinel_values)
+
+        df = df.withColumn(c, F.when(is_sentinel, None).otherwise(cleaned))
+
     df = df.withColumn("borough", F.initcap("borough"))
     df = df.withColumn("city", F.initcap("city"))
-    df = df.withColumn("intake_channel", F.when(F.col("intake_channel") == "OTHER", "Unknown")
-                                   .otherwise(F.initcap("intake_channel")))
+    df = df.withColumn("intake_channel", F.initcap("intake_channel"))
+    df = df.withColumn("agency", F.upper("agency"))
     return df
 
 
 def cast_types(df: DataFrame) -> DataFrame:
-    df = df.withColumn("complaint_id", F.col("complaint_id").cast("int"))
+    df = df.withColumn("complaint_id", F.col("complaint_id").cast("long"))
     for column in ["created_at", "closed_at", "last_updated_at"]:
-        df = df.withColumn(column, F.col(column).cast("timestamp"))
+        df = df.withColumn(column, F.try_to_timestamp(F.col(column)))
     return df
+
+
+def deduplicate(df: DataFrame) -> DataFrame:
+    window = Window.partitionBy("complaint_id").orderBy(
+        F.col("last_updated_at").desc_nulls_last(),
+        F.col("_ingested_at").desc()
+    )
+    return (df
+        .withColumn("_row_num", F.row_number().over(window))
+        .filter(F.col("_row_num") == 1)
+        .drop("_row_num")
+    )
+
+
+def validate_bounds(df: DataFrame) -> DataFrame:
+    max_seconds = MAX_RESOLUTION_YEARS * 365.25 * 24 * 3600
+    duration_seconds = F.unix_timestamp("closed_at") - F.unix_timestamp("created_at")
+
+    return df.withColumn(
+        "_duration_valid",
+        F.when(F.col("closed_at").isNull(), F.lit(True))  # still open, nothing to validate yet
+         .when((duration_seconds < 0) | (duration_seconds > max_seconds), F.lit(False))
+         .otherwise(F.lit(True))
+    )
+
+
+def derive_metrics(df: DataFrame) -> DataFrame:
+    return df.withColumn(
+        "response_time_hours",
+        F.round(
+            (F.unix_timestamp("closed_at") - F.unix_timestamp("created_at")) / 3600,
+            2
+        ).cast(DecimalType(10, 2))
+    )
 
 
 def build_silver(df: DataFrame) -> DataFrame:
@@ -53,4 +94,7 @@ def build_silver(df: DataFrame) -> DataFrame:
             .transform(select_and_rename)
             .transform(normalize_strings)
             .transform(cast_types)
+            .transform(deduplicate)
+            .transform(validate_bounds)
+            .transform(derive_metrics)
     )
