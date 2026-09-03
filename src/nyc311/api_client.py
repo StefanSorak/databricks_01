@@ -58,7 +58,6 @@ def run_ingestion(landing_root: str, default_start: str) -> dict:
     watermark_path = f"{landing_root}/_watermark/watermark.json"
     since = read_watermark(watermark_path, default_start)
     out_dir = f"{landing_root}/ingest_date={date.today().isoformat()}"
-    
 
     max_seen, total, pages = since, 0, 0
     for page_num, records in enumerate(fetch_pages(since)):

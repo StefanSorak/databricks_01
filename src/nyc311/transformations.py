@@ -24,9 +24,7 @@ KEEP_COLUMNS = {
 
 
 def select_and_rename(df: DataFrame) -> DataFrame:
-    return df.select(
-        [F.col(src).alias(dst) for src, dst in KEEP_COLUMNS.items()]
-    )
+    return df.select([F.col(src).alias(dst) for src, dst in KEEP_COLUMNS.items()])
 
 
 def normalize_strings(df: DataFrame) -> DataFrame:
@@ -57,11 +55,10 @@ def cast_types(df: DataFrame) -> DataFrame:
 
 def deduplicate(df: DataFrame) -> DataFrame:
     window = Window.partitionBy("complaint_id").orderBy(
-        F.col("last_updated_at").desc_nulls_last(),
-        F.col("_ingested_at").desc()
+        F.col("last_updated_at").desc_nulls_last(), F.col("_ingested_at").desc()
     )
-    return (df
-        .withColumn("_row_num", F.row_number().over(window))
+    return (
+        df.withColumn("_row_num", F.row_number().over(window))
         .filter(F.col("_row_num") == 1)
         .drop("_row_num")
     )
@@ -73,9 +70,11 @@ def validate_bounds(df: DataFrame) -> DataFrame:
 
     return df.withColumn(
         "_duration_valid",
-        F.when(F.col("closed_at").isNull(), F.lit(True))  # still open, nothing to validate yet
-         .when((duration_seconds < 0) | (duration_seconds > max_seconds), F.lit(False))
-         .otherwise(F.lit(True))
+        F.when(
+            F.col("closed_at").isNull(), F.lit(True)
+        )  # still open, nothing to validate yet
+        .when((duration_seconds < 0) | (duration_seconds > max_seconds), F.lit(False))
+        .otherwise(F.lit(True)),
     )
 
 
@@ -83,18 +82,17 @@ def derive_metrics(df: DataFrame) -> DataFrame:
     return df.withColumn(
         "response_time_hours",
         F.round(
-            (F.unix_timestamp("closed_at") - F.unix_timestamp("created_at")) / 3600,
-            2
-        ).cast(DecimalType(10, 2))
+            (F.unix_timestamp("closed_at") - F.unix_timestamp("created_at")) / 3600, 2
+        ).cast(DecimalType(10, 2)),
     )
 
 
 def build_silver(df: DataFrame) -> DataFrame:
-    return (df
-            .transform(select_and_rename)
-            .transform(normalize_strings)
-            .transform(cast_types)
-            .transform(deduplicate)
-            .transform(validate_bounds)
-            .transform(derive_metrics)
+    return (
+        df.transform(select_and_rename)
+        .transform(normalize_strings)
+        .transform(cast_types)
+        .transform(deduplicate)
+        .transform(validate_bounds)
+        .transform(derive_metrics)
     )
