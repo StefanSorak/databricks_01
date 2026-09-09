@@ -1,4 +1,4 @@
 catalog: nyc311
 schema: pipeline
 landing_volume: landing
-start_date: "2026-07-01T00:00:00"
+start_date: "2025-10-01T00:00:00"
