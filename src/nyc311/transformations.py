@@ -81,8 +81,12 @@ def validate_bounds(df: DataFrame) -> DataFrame:
 def derive_metrics(df: DataFrame) -> DataFrame:
     return df.withColumn(
         "response_time_hours",
-        F.round(
-            (F.unix_timestamp("closed_at") - F.unix_timestamp("created_at")) / 3600, 2
+        F.when(
+            F.col("_duration_valid"),
+            F.round(
+                (F.unix_timestamp("closed_at") - F.unix_timestamp("created_at")) / 3600,
+                2,
+            ),
         ).cast(DecimalType(10, 2)),
     )
 
