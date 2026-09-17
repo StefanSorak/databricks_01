@@ -53,6 +53,15 @@ def cast_types(df: DataFrame) -> DataFrame:
     return df
 
 
+def normalize_status(df: DataFrame) -> DataFrame:
+    return df.withColumn(
+        "status",
+        F.when(F.col("status").isNotNull(), F.col("status"))
+        .when(F.col("closed_at").isNotNull(), F.lit("Closed"))
+        .otherwise(F.lit("Open")),
+    )
+
+
 def deduplicate(df: DataFrame) -> DataFrame:
     window = Window.partitionBy("complaint_id").orderBy(
         F.col("last_updated_at").desc_nulls_last(), F.col("_ingested_at").desc()
@@ -96,6 +105,7 @@ def build_silver(df: DataFrame) -> DataFrame:
         df.transform(select_and_rename)
         .transform(normalize_strings)
         .transform(cast_types)
+        .transform(normalize_status)
         .transform(deduplicate)
         .transform(validate_bounds)
         .transform(derive_metrics)
