@@ -1,9 +1,8 @@
 # Databricks notebook source
-
-dbutils.library.restartPython()
-
-# COMMAND ----------
-
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 import sys, os
 sys.path.append(os.path.abspath("../src"))
 
