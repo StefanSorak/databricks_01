@@ -22,9 +22,6 @@ def gold_agency_performance(df: DataFrame) -> DataFrame:
 
     df = df_closed_agg.join(df_open_agg, on=["agency", "complaint_type"], how="full")
 
-    df = df.na.fill(0, subset=[
-        "closed_count", "open_count",
-        "median_open_age_hours", "p90_response_hours", "median_response_time_hours",
-    ])
+    df = df.na.fill(0, subset=["closed_count", "open_count"])
     
     return df
