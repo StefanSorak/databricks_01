@@ -27,11 +27,16 @@ print(f"BR-5: {invalid}/{total} rows flagged with implausible resolution duratio
 # --- Idempotent upsert into silver_complaints, keyed on complaint_id ---
 target_table = f"{catalog}.{schema}.silver_complaints"
 
-if not spark.catalog.tableExists(target_table):
+try:
+    target = DeltaTable.forName(spark, target_table)
+    table_exists = True
+except Exception:
+    table_exists = False
+
+if not table_exists:
     df.write.format("delta").saveAsTable(target_table)
     print(f"Created {target_table} with {total} rows")
 else:
-    target = DeltaTable.forName(spark, target_table)
     (target.alias("t")
         .merge(df.alias("s"), "t.complaint_id = s.complaint_id")
         .whenMatchedUpdateAll()

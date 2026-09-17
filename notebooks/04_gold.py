@@ -69,7 +69,6 @@ if not table_exists:
     df_borough_metrics.write.format("delta").saveAsTable(target_table)
     print(f"Table created {target_table}")
 else:
-    target = DeltaTable.forName(spark, target_table)
     (target.alias("t")
         .merge(df_borough_metrics.alias("s"), "t.borough <=> s.borough AND t.complaint_type <=> s.complaint_type")
         .whenMatchedUpdateAll()
