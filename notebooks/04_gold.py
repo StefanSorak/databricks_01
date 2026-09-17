@@ -33,6 +33,7 @@ target_table = f"{catalog}.{schema}.br_1_agency_performance"
 
 if not spark.catalog.tableExists(target_table):
     df.write.format("delta").saveAsTable(target_table)
+    print(f"Table created {target_table}")
 else:
     target = DeltaTable.forName(spark, target_table)
     (target.alias("t")
