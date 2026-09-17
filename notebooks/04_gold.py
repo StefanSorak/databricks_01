@@ -26,18 +26,52 @@ df = spark.read.table(f"{catalog}.{schema}.silver_complaints")
 from nyc311.aggregations import gold_agency_performance
 
 
-df = gold_agency_performance(df)
+df_agency_performance = gold_agency_performance(df)
 
-# --- Idempotent upsert into br_1_agency_performance, keyed on agency, complaint_type, month ---
-target_table = f"{catalog}.{schema}.br_1_agency_performance"
+# --- Idempotent upsert into gold_agency_performance, keyed on agency, complaint_type, month ---
+target_table = f"{catalog}.{schema}.gold_agency_performance"
 
-if not spark.catalog.tableExists(target_table):
-    df.write.format("delta").saveAsTable(target_table)
+try:
+    target = DeltaTable.forName(spark, target_table)
+    table_exists = True
+except Exception:
+    table_exists = False
+
+if not table_exists:
+    df_agency_performance.write.format("delta").saveAsTable(target_table)
+    print(f"Table created {target_table}")
+else:
+    (target.alias("t")
+        .merge(df_agency_performance.alias("s"), "t.agency = s.agency AND t.complaint_type = s.complaint_type AND t.month <=> s.month")
+        .whenMatchedUpdateAll()
+        .whenNotMatchedInsertAll()
+        .execute())
+    print(f"Merged into {target_table}")
+
+# COMMAND ----------
+
+
+# BR-2 - Borough equity
+from nyc311.aggregations import gold_borough_metrics
+
+df_borough_metrics = gold_borough_metrics(df)
+
+# --- Idempotent upsert into gold_borough_metrics, keyed on borough, complaint_type ---
+target_table = f"{catalog}.{schema}.gold_borough_metrics"
+
+try:
+    target = DeltaTable.forName(spark, target_table)
+    table_exists = True
+except Exception:
+    table_exists = False
+
+if not table_exists:
+    df_borough_metrics.write.format("delta").saveAsTable(target_table)
     print(f"Table created {target_table}")
 else:
     target = DeltaTable.forName(spark, target_table)
     (target.alias("t")
-        .merge(df.alias("s"), "t.agency = s.agency AND t.complaint_type = s.complaint_type AND t.month <=> s.month")
+        .merge(df_borough_metrics.alias("s"), "t.borough <=> s.borough AND t.complaint_type <=> s.complaint_type")
         .whenMatchedUpdateAll()
         .whenNotMatchedInsertAll()
         .execute())
