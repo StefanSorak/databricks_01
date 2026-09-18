@@ -29,17 +29,12 @@ target_table = f"{catalog}.{schema}.silver_complaints"
 
 try:
     target = DeltaTable.forName(spark, target_table)
-    table_exists = True
-except Exception:
-    table_exists = False
-
-if not table_exists:
-    df.write.format("delta").saveAsTable(target_table)
-    print(f"Created {target_table} with {total} rows")
-else:
     (target.alias("t")
         .merge(df.alias("s"), "t.complaint_id = s.complaint_id")
         .whenMatchedUpdateAll()
         .whenNotMatchedInsertAll()
         .execute())
     print(f"Merged into {target_table}")
+except Exception:
+    df.write.format("delta").saveAsTable(target_table)
+    print(f"Created {target_table} with {total} rows")

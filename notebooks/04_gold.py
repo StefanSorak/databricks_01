@@ -33,20 +33,15 @@ target_table = f"{catalog}.{schema}.gold_agency_performance"
 
 try:
     target = DeltaTable.forName(spark, target_table)
-    table_exists = True
-except Exception:
-    table_exists = False
-
-if not table_exists:
-    df_agency_performance.write.format("delta").saveAsTable(target_table)
-    print(f"Table created {target_table}")
-else:
     (target.alias("t")
         .merge(df_agency_performance.alias("s"), "t.agency = s.agency AND t.complaint_type = s.complaint_type AND t.month <=> s.month")
         .whenMatchedUpdateAll()
         .whenNotMatchedInsertAll()
         .execute())
     print(f"Merged into {target_table}")
+except Exception:
+    df_agency_performance.write.format("delta").saveAsTable(target_table)
+    print(f"Table created {target_table}")
 
 # COMMAND ----------
 
@@ -61,20 +56,15 @@ target_table = f"{catalog}.{schema}.gold_borough_metrics"
 
 try:
     target = DeltaTable.forName(spark, target_table)
-    table_exists = True
-except Exception:
-    table_exists = False
-
-if not table_exists:
-    df_borough_metrics.write.format("delta").saveAsTable(target_table)
-    print(f"Table created {target_table}")
-else:
     (target.alias("t")
         .merge(df_borough_metrics.alias("s"), "t.borough <=> s.borough AND t.complaint_type <=> s.complaint_type")
         .whenMatchedUpdateAll()
         .whenNotMatchedInsertAll()
         .execute())
     print(f"Merged into {target_table}")
+except Exception:
+    df_borough_metrics.write.format("delta").saveAsTable(target_table)
+    print(f"Table created {target_table}")
 
 # COMMAND ----------
 
@@ -88,17 +78,12 @@ target_table = f"{catalog}.{schema}.gold_channel_trends"
 
 try:
     target = DeltaTable.forName(spark, target_table)
-    table_exists = True
-except Exception:
-    table_exists = False
-
-if not table_exists:
-    df_channel_trends.write.format("delta").saveAsTable(target_table)
-    print(f"Table created {target_table}")
-else:
     (target.alias("t")
         .merge(df_channel_trends.alias("s"), "t.intake_channel <=> s.intake_channel AND t.month <=> s.month")
         .whenMatchedUpdateAll()
         .whenNotMatchedInsertAll()
         .execute())
     print(f"Merged into {target_table}")
+except Exception:
+    df_channel_trends.write.format("delta").saveAsTable(target_table)
+    print(f"Table created {target_table}")
