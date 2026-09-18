@@ -45,3 +45,17 @@ def gold_channel_trends(df: DataFrame) -> DataFrame:
     df = df.withColumn("month", F.date_trunc("month", "created_at"))
 
     return df.groupBy("intake_channel", "month").agg(F.count("*").alias("complaint_count"))
+    
+
+def gold_weather_date(df_silver: DataFrame, df_weather: DataFrame) -> DataFrame:
+    df_silver = df_silver.filter(F.col("complaint_type") == "HEAT/HOT WATER")
+    df_silver = df_silver.withColumn("date", F.to_date( "created_at"))
+    df_silver = df_silver.groupBy("date").agg(F.count("*").alias("complaint_count"))
+
+    df = (df_weather.join(df_silver, on="date", how="left")
+        .withColumn("temperature_2m_mean", F.round(F.col("temperature_2m_mean"), 2))
+        .withColumn("temperature_2m_max", F.round(F.col("temperature_2m_max"), 2))
+        .withColumn("temperature_2m_min", F.round(F.col("temperature_2m_min"), 2))
+        .na.fill(0, subset=["complaint_count"]))
+
+    return df

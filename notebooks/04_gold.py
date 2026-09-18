@@ -72,6 +72,7 @@ except Exception:
 # BR-3 - Weather data (fetch + land as a table; join/aggregation not built yet)
 from datetime import date
 from nyc311.weather import fetch_daily_weather
+from nyc311.aggregations import gold_weather_date
 
 weather_rows = fetch_daily_weather(cfg["start_date"][:10], date.today().isoformat())
 weather_df = spark.createDataFrame(weather_rows).withColumn("date", F.to_date("date"))
@@ -83,6 +84,21 @@ weather_df = spark.createDataFrame(weather_rows).withColumn("date", F.to_date("d
 target_table = f"{catalog}.{schema}.weather_daily"
 weather_df.write.format("delta").mode("overwrite").saveAsTable(target_table)
 print(f"Wrote {weather_df.count()} rows to {target_table}")
+
+df_weather_date = gold_weather_date(df, weather_df)
+target_table = f"{catalog}.{schema}.gold_weather_date"
+
+try:
+    target = DeltaTable.forName(spark, target_table)
+    (target.alias("t")
+        .merge(df_weather_date.alias("s"), "t.complaint_id = s.complaint_id")
+        .whenMatchedUpdateAll()
+        .whenNotMatchedInsertAll()
+        .execute())
+    print(f"Merged into {target_table}")
+except Exception:
+    df_weather_date.write.format("delta").saveAsTable(target_table)
+    print(f"Table created {target_table}")
 
 # COMMAND ----------
 
