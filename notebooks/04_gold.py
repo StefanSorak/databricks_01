@@ -11,6 +11,7 @@ import sys, os
 sys.path.append(os.path.abspath("../src"))
 
 from delta.tables import DeltaTable
+from pyspark.sql import functions as F
 import yaml
 
 with open("../conf/config.yaml") as f:
@@ -65,6 +66,23 @@ try:
 except Exception:
     df_borough_metrics.write.format("delta").saveAsTable(target_table)
     print(f"Table created {target_table}")
+
+# COMMAND ----------
+
+# BR-3 - Weather data (fetch + land as a table; join/aggregation not built yet)
+from datetime import date
+from nyc311.weather import fetch_daily_weather
+
+weather_rows = fetch_daily_weather(cfg["start_date"][:10], date.today().isoformat())
+weather_df = spark.createDataFrame(weather_rows).withColumn("date", F.to_date("date"))
+
+# --- Always a full window refetch, not an incremental append, so overwrite is
+# correct here (unlike the MERGE tables above): there's no watermark, and the
+# table only ever needs to hold "today's view of the whole window," not an
+# accumulated history. Overwrite mode also creates the table on first run for free. ---
+target_table = f"{catalog}.{schema}.weather_daily"
+weather_df.write.format("delta").mode("overwrite").saveAsTable(target_table)
+print(f"Wrote {weather_df.count()} rows to {target_table}")
 
 # COMMAND ----------
 
