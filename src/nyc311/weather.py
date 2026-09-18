@@ -16,12 +16,7 @@ _SESSION = requests.Session()
 
 
 def _get(params: dict) -> dict:
-    """
-    GET one response from Open-Meteo, retrying transient failures with exponential
-    backoff. Mirrors api_client._get: only timeouts, connection errors and the
-    retryable status codes get another attempt — a 4xx (e.g. end_date out of the
-    allowed 1940..today range) means the query itself is wrong and won't self-heal.
-    """
+    """GET with retry/backoff on timeouts and 5xx, mirroring api_client._get; fails fast on 4xx."""
     failure = {}
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
@@ -43,10 +38,7 @@ def _get(params: dict) -> dict:
 
 
 def rows_from_daily(daily: dict) -> list[dict]:
-    """
-    Pure reshape: Open-Meteo returns one array per variable, all indexed by the same
-    `time` array. Transpose into one dict per day, keyed `date` plus each variable.
-    """
+    """Transpose Open-Meteo's per-variable arrays into one dict per day."""
     dates = daily["time"]
     variables = [k for k in daily if k != "time"]
     return [
@@ -61,18 +53,7 @@ def fetch_daily_weather(
     latitude: float = NYC_LATITUDE,
     longitude: float = NYC_LONGITUDE,
 ) -> list[dict]:
-    """
-    Fetch one row per day in [start_date, end_date] (both YYYY-MM-DD, inclusive).
-
-    A single call covers the whole range — unlike Socrata, Open-Meteo's daily
-    aggregates aren't row-paginated, so a full backfill-scale request (~350 days)
-    is one lightweight request, not hundreds.
-
-    end_date is clamped to today: the API 400s on any end_date past its own
-    "today" (measured in its server's UTC clock), so a caller computing "now" a
-    few hours off from that clock would otherwise fail the whole run for one day
-    of data it can't serve yet anyway.
-    """
+    """Fetch one row per day in [start_date, end_date]; end_date is clamped to today since the API 400s past it."""
     end_date = min(end_date, date.today().isoformat())
     payload = _get(
         {
