@@ -22,6 +22,7 @@ def _get(params: dict) -> dict:
     retryable status codes get another attempt — a 4xx (e.g. end_date out of the
     allowed 1940..today range) means the query itself is wrong and won't self-heal.
     """
+    failure = {}
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             resp = _SESSION.get(ARCHIVE_URL, params=params, timeout=REQUEST_TIMEOUT)
@@ -33,11 +34,12 @@ def _get(params: dict) -> dict:
                 return resp.json()
             failure = requests.HTTPError(f"HTTP {resp.status_code} from Open-Meteo")
 
-        if attempt == MAX_ATTEMPTS:
-            raise failure
-        delay = BACKOFF_SECONDS * 2 ** (attempt - 1)
-        print(f"  request failed ({failure}); retrying in {delay}s")
-        time.sleep(delay)
+        if attempt < MAX_ATTEMPTS:
+            delay = BACKOFF_SECONDS * 2 ** (attempt - 1)
+            print(f"  request failed ({failure}); retrying in {delay}s")
+            time.sleep(delay)
+
+    raise failure
 
 
 def rows_from_daily(daily: dict) -> list[dict]:

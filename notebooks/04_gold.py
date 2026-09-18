@@ -91,7 +91,7 @@ target_table = f"{catalog}.{schema}.gold_weather_date"
 try:
     target = DeltaTable.forName(spark, target_table)
     (target.alias("t")
-        .merge(df_weather_date.alias("s"), "t.complaint_id = s.complaint_id")
+        .merge(df_weather_date.alias("s"), "t.date = s.date")
         .whenMatchedUpdateAll()
         .whenNotMatchedInsertAll()
         .execute())
