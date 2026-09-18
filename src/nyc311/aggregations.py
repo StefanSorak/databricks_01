@@ -37,5 +37,11 @@ def gold_borough_metrics(df: DataFrame) -> DataFrame:
         F.count_if(F.col("closed_at").isNull()).alias("open_count"),
         F.round(F.median(F.col("open_age_hours")), 2).alias("median_open_age_hours"),
     )
-    
+
     return df
+
+
+def gold_channel_trends(df: DataFrame) -> DataFrame:
+    df = df.withColumn("month", F.date_trunc("month", "created_at"))
+
+    return df.groupBy("intake_channel", "month").agg(F.count("*").alias("complaint_count"))

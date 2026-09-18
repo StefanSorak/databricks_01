@@ -75,3 +75,30 @@ else:
         .whenNotMatchedInsertAll()
         .execute())
     print(f"Merged into {target_table}")
+
+# COMMAND ----------
+
+# BR-4 - Channel shift
+from nyc311.aggregations import gold_channel_trends
+
+df_channel_trends = gold_channel_trends(df)
+
+# --- Idempotent upsert into gold_channel_trends, keyed on intake_channel, month ---
+target_table = f"{catalog}.{schema}.gold_channel_trends"
+
+try:
+    target = DeltaTable.forName(spark, target_table)
+    table_exists = True
+except Exception:
+    table_exists = False
+
+if not table_exists:
+    df_channel_trends.write.format("delta").saveAsTable(target_table)
+    print(f"Table created {target_table}")
+else:
+    (target.alias("t")
+        .merge(df_channel_trends.alias("s"), "t.intake_channel <=> s.intake_channel AND t.month <=> s.month")
+        .whenMatchedUpdateAll()
+        .whenNotMatchedInsertAll()
+        .execute())
+    print(f"Merged into {target_table}")
