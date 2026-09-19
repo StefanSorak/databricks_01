@@ -10,6 +10,7 @@ architecture, driven by six concrete business requirements rather than a generic
 - **[Known data-quality findings](#known-data-quality-findings)**
 - **[Key engineering decisions](#key-engineering-decisions)**
 - **[Repo layout](#repo-layout)**
+- **[Testing](#testing)**
 - **[Running it](#running-it)**
 
 ## Architecture
@@ -176,10 +177,30 @@ src/nyc311/                All real logic: pure, importable, testable functions
   quality.py                BR-5 checks
 ```
 
+## Testing
+
+`src/nyc311/`'s functions are pure — no Spark session lookups, no catalog/`dbutils` calls — so
+they're unit-tested locally with `pytest` and a plain local `SparkSession`, no Databricks
+required. System Python here is too new for PySpark's published wheels, so the project pins a
+local Python 3.12 + Java 17 via [`mise`](https://mise.jdx.dev) (`mise.toml`) instead of touching
+system Python:
+
+```
+mise install               # installs the pinned Python + Java
+mise exec -- python -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pytest
+```
+
+Notebooks themselves (Unity Catalog, `dbutils`, Delta `MERGE`) are intentionally **not**
+unit-tested — that's the orchestration layer, and it can only really run on Databricks. See
+[Running it](#running-it) for that.
+
 ## Running it
 
 This is built specifically for **Databricks Free Edition** — notebooks import from `src/` via
-a `sys.path` workaround (no installable package), and there's no local Spark session, so the
-pipeline can't be run outside Databricks. Import this repo as a Databricks Git folder, run
-`00_setup` once, then `01_ingest` → `02_bronze` → `03_silver` → `04_gold` in order. Every step
-is idempotent — safe to rerun at any point.
+a `sys.path` workaround (no installable package), and there's no Unity Catalog or `dbutils`
+locally, so the *pipeline itself* can't be run outside Databricks (the pure functions inside it
+can — see [Testing](#testing)). Import this repo as a Databricks Git folder, run `00_setup`
+once, then `01_ingest` → `02_bronze` → `03_silver` → `04_gold` in order. Every step is
+idempotent — safe to rerun at any point.
