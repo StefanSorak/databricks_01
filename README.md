@@ -44,7 +44,7 @@ Medallion layers are table prefixes (`bronze_`, `silver_`, `gold_`) in one schem
 | BR-3 | Heating season readiness — daily HEAT/HOT WATER volume joined with temperature, ≥1 full winter. | ✅ `gold_weather_date` |
 | BR-4 | Channel shift — volume by intake channel over time. | ✅ `gold_channel_trends` |
 | BR-5 | Data trust — zero duplicate complaints, resolution times bounded, visible freshness. Pipeline fails loudly. | ✅ `quality_checks` |
-| BR-6 | Self-service — gold usable by a SQL-literate analyst with no raw-data knowledge. | 🟡 this README + column comments |
+| BR-6 | Self-service — gold usable by a SQL-literate analyst with no raw-data knowledge. | ✅ this README + table/column comments on all gold tables |
 
 ## Data dictionary (gold layer)
 
