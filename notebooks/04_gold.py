@@ -44,6 +44,21 @@ except Exception:
     df_agency_performance.write.format("delta").saveAsTable(target_table)
     print(f"Table created {target_table}")
 
+# BR-6: column comments, reapplied every run so a dropped/recreated table gets them back
+spark.sql(f"COMMENT ON TABLE {target_table} IS 'Median/p90 resolution time and open-complaint aging, per agency and complaint type, monthly. (BR-1)'")
+column_comments = {
+    "agency": "NYC agency code (e.g. HPD, DOT)",
+    "complaint_type": "Complaint category",
+    "month": "Resolution month (closed_at truncated to month); null for agency/type pairs with no closed complaints yet",
+    "closed_count": "Complaints closed that month for that agency/type; 0 if none",
+    "median_response_time_hours": "Median created-to-closed hours, that month",
+    "p90_response_hours": "90th-percentile resolution hours, that month",
+    "open_count": "Currently-open complaints for that agency/type (a snapshot, not month-scoped)",
+    "median_open_age_hours": "Median hours-open for those currently-open complaints",
+}
+for col, comment in column_comments.items():
+    spark.sql(f"ALTER TABLE {target_table} ALTER COLUMN {col} COMMENT '{comment}'")
+
 # COMMAND ----------
 
 
@@ -66,6 +81,20 @@ try:
 except Exception:
     df_borough_metrics.write.format("delta").saveAsTable(target_table)
     print(f"Table created {target_table}")
+
+# BR-6: column comments, reapplied every run so a dropped/recreated table gets them back
+spark.sql(f"COMMENT ON TABLE {target_table} IS 'Resolution time and open-complaint aging, per borough and complaint type. Missing/Unspecified borough counted, not dropped. (BR-2)'")
+column_comments = {
+    "borough": "Can be null or Unspecified; kept per BR-2, never dropped",
+    "complaint_type": "Occasionally null in source data",
+    "closed_count": "Complaints closed for that borough and complaint_type; 0 if none",
+    "median_response_time_hours": "Median created-to-closed hours",
+    "p90_response_hours": "90th-percentile resolution hours",
+    "open_count": "Currently-open complaints for that borough and complaint_type",
+    "median_open_age_hours": "Median hours-open for those currently-open complaints",
+}
+for col, comment in column_comments.items():
+    spark.sql(f"ALTER TABLE {target_table} ALTER COLUMN {col} COMMENT '{comment}'")
 
 # COMMAND ----------
 
@@ -97,6 +126,18 @@ except Exception:
     df_weather_date.write.format("delta").saveAsTable(target_table)
     print(f"Table created {target_table}")
 
+# BR-6: column comments, reapplied every run so a dropped/recreated table gets them back
+spark.sql(f"COMMENT ON TABLE {target_table} IS 'Daily HEAT/HOT WATER complaint volume joined with NYC temperature. (BR-3)'")
+column_comments = {
+    "date": "Calendar day (America/New_York)",
+    "temperature_2m_max": "Daily max NYC temperature, degrees Celsius",
+    "temperature_2m_min": "Daily min NYC temperature, degrees Celsius",
+    "temperature_2m_mean": "Daily mean NYC temperature, degrees Celsius",
+    "complaint_count": "HEAT/HOT WATER complaints created that day; 0 if none",
+}
+for col, comment in column_comments.items():
+    spark.sql(f"ALTER TABLE {target_table} ALTER COLUMN {col} COMMENT '{comment}'")
+
 # COMMAND ----------
 
 # BR-4 - Channel shift
@@ -118,3 +159,13 @@ try:
 except Exception:
     df_channel_trends.write.format("delta").saveAsTable(target_table)
     print(f"Table created {target_table}")
+
+# BR-6: column comments, reapplied every run so a dropped/recreated table gets them back
+spark.sql(f"COMMENT ON TABLE {target_table} IS 'Complaint volume by intake channel over time. (BR-4)'")
+column_comments = {
+    "intake_channel": "Mobile, Phone, Online, Other, or null",
+    "month": "Creation month (created_at truncated to month)",
+    "complaint_count": "Complaints filed that month via that channel",
+}
+for col, comment in column_comments.items():
+    spark.sql(f"ALTER TABLE {target_table} ALTER COLUMN {col} COMMENT '{comment}'")
