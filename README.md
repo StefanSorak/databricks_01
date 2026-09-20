@@ -6,6 +6,7 @@ architecture, driven by six concrete business requirements rather than a generic
 
 - **[Architecture](#architecture)**
 - **[Business requirements](#business-requirements)**
+- **[Dashboard](#dashboard)**
 - **[Data dictionary](#data-dictionary-gold-layer)** (gold layer)
 - **[Known data-quality findings](#known-data-quality-findings)**
 - **[Key engineering decisions](#key-engineering-decisions)**
@@ -46,6 +47,35 @@ Medallion layers are table prefixes (`bronze_`, `silver_`, `gold_`) in one schem
 | BR-4 | Channel shift — volume by intake channel over time. | ✅ `gold_channel_trends` |
 | BR-5 | Data trust — zero duplicate complaints, resolution times bounded, visible freshness. Pipeline fails loudly. | ✅ `quality_checks` |
 | BR-6 | Self-service — gold usable by a SQL-literate analyst with no raw-data knowledge. | ✅ this README + table/column comments on all gold tables |
+
+## Dashboard
+
+A Databricks SQL/Lakeview dashboard built directly on the gold tables — one page per business
+requirement, each backed by its own SQL dataset.
+
+**BR-3 — Heating season vs. temperature.** The signature chart: daily HEAT/HOT WATER complaint
+volume (bars) against mean NYC temperature (line). Volume clearly tracks the winter cold snap
+and falls off through spring/summer.
+
+![Complaints vs temperature](docs/complaints-vs-temperature.png)
+
+**BR-1 — Slowest agencies and open backlog**, both for the latest fully-completed month, filtered
+to agency/complaint_type pairs with at least 10 closed complaints (to avoid a handful of
+low-volume outliers skewing the ranking).
+
+![Slowest agencies by median response time](docs/slowest-agencies-by-median-response-time.png)
+![Open complaint backlog by agency](docs/open-complaint-backlog-by-agency.png)
+
+**BR-2 — Borough equity**, weighted by volume across complaint types. Every real borough sits
+in a fairly tight 60–90 hour band — `Unspecified/Missing` is the outlier at ~310 hours, a genuine
+finding rather than a chart artifact (BR-2 requires this bucket be counted, never dropped).
+
+![Volume-weighted median response time by borough](docs/volume-weighted-median-response-time-by-borough.png)
+
+**BR-4 — Channel shift over time.** Online has consistently been the dominant intake channel for
+the whole backfill window, well ahead of Phone and Mobile.
+
+![Complaint volume by intake channel over time](docs/complaint-volume-by-intake-channel.png)
 
 ## Data dictionary (gold layer)
 

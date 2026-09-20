@@ -18,9 +18,7 @@ def freshness_summary(df: DataFrame) -> dict:
 
 
 def run_quality_checks(df: DataFrame, key_col: str = "complaint_id") -> dict:
-    # One combined aggregation instead of calling the three functions above separately -
-    # serverless compute doesn't support caching, so this avoids 4 full recomputes of
-    # build_silver() for what is otherwise one pass over the data.
+    # One pass instead of calling the three functions above separately - no caching on serverless.
     row = df.agg(
         F.count("*").alias("total_rows"),
         F.countDistinct(F.col(key_col)).alias("distinct_keys"),

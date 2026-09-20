@@ -14,20 +14,12 @@ MAX_ATTEMPTS = 4
 BACKOFF_SECONDS = 5
 RETRY_STATUS = {429, 500, 502, 503, 504}
 
-# One session for the whole run: a backfill is hundreds of requests and reusing the
-# connection avoids a TLS handshake on every one.
+# Reused across a backfill's hundreds of requests to avoid a TLS handshake each time.
 _SESSION = requests.Session()
 
 
 def read_watermark(watermark_path: str, default: str) -> str:
-    """
-    Returns the last date landed, or default if there is no usable watermark.
-
-    The file records the start_date the run was seeded from, so widening start_date in
-    config invalidates it and re-backfills from the new date. Without that check a
-    widened start_date would be silently ignored: the stored high-water mark is
-    always later than any earlier start_date, so it would always win.
-    """
+    """Last date landed, or default - resets if config's start_date changed, so widening it re-backfills."""
     try:
         with open(watermark_path) as f:
             state = json.load(f)
@@ -46,13 +38,7 @@ def write_watermark(watermark_path: str, value: str, start_date: str) -> None:
 
 
 def _get(params: dict) -> list[dict]:
-    """
-    GET one page from Socrata, retrying transient failures with exponential backoff.
-
-    A backfill is hundreds of requests, so a single blip must not end the run. Only
-    timeouts, connection errors and the retryable status codes get another attempt;
-    a 4xx means the query itself is wrong and will fail identically forever.
-    """
+    """GET one page with retry/backoff; fails fast on 4xx since a bad query won't self-heal."""
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             resp = _SESSION.get(API_URL, params=params, timeout=REQUEST_TIMEOUT)
@@ -72,13 +58,7 @@ def _get(params: dict) -> list[dict]:
 
 
 def iter_chunks(since: str, until: str):
-    """
-    Yield (start, end) timestamp pairs covering (since, until], CHUNK_DAYS at a time.
-
-    Each pair is exclusive of start and inclusive of end, so consecutive chunks
-    neither overlap nor leave gaps. The first chunk runs from the watermark to the
-    next midnight boundary; the rest are whole days.
-    """
+    """Yield (start, end] timestamp pairs, CHUNK_DAYS at a time, so chunks never overlap or gap."""
     start = datetime.fromisoformat(since).replace(microsecond=0)
     stop = datetime.fromisoformat(until).replace(microsecond=0)
 
@@ -92,23 +72,7 @@ def iter_chunks(since: str, until: str):
 
 
 def fetch_pages(start: str, end: str):
-    """
-    Yield lists of records with start < created_date <= end, page by page.
-
-    Two Socrata characteristics shape this query, both measured against the ~3.7M-row
-    2025-26 winter window:
-
-    - "$order=:id" is a system column Socrata cannot serve from an index alongside a
-      created_date filter. It sorted the entire filtered set before returning page 0
-      and read-timed out at 90s for even 1,000 rows. Ordering by created_date - the
-      same column being filtered - streams in index order: 50k rows in ~12s. ":id"
-      stays as the tiebreaker so rows sharing a created_date still page stably.
-    - Deep "$offset" degrades badly regardless of ordering: 50k rows at offset 2M
-      timed out at 90s. That is why the caller slices the window into days rather
-      than paging through it. The busiest day in the window holds ~23k records, well
-      under PAGE_SIZE, so offset stays 0 in practice - the loop below is a safety net
-      for a freak day, and its offsets stay shallow enough to serve.
-    """
+    """Page by created_date, not :id (Socrata can't index that alongside a date filter and times out)."""
     offset = 0
     while True:
         records = _get(
@@ -128,15 +92,7 @@ def fetch_pages(start: str, end: str):
 
 
 def write_ndjson_gz(records: list[dict], out_dir: str, page: int, run_id: str) -> str:
-    """
-    Land one page as gzipped NDJSON at run_{run_id}_page_{page}.json.gz.
-
-    The run_id keeps two runs on the same day from colliding: page numbering restarts
-    at 0 every run, so a bare page_0000.json.gz would be overwritten by the next run
-    into the same ingest_date= folder. Auto Loader's checkpoint has already recorded
-    that path as ingested, so the overwritten content would never reach bronze - a
-    silent gap rather than a duplicate.
-    """
+    """Lands one page as gzipped NDJSON; run_id avoids same-day filename collisions across reruns."""
     os.makedirs(out_dir, exist_ok=True)
     path = f"{out_dir}/run_{run_id}_page_{page:04d}.json.gz"
     with gzip.open(path, "wt", encoding="utf-8") as f:
@@ -166,10 +122,7 @@ def run_ingestion(landing_root: str, default_start: str, verbose: bool = True) -
             max_seen = max(max_seen, batch_max)
         chunks += 1
 
-        # The chunk's whole date range is drained before we get here, so advancing now
-        # cannot skip an unfetched record - which is only true because pages arrive in
-        # created_date order. Under the old ":id" ordering this would have been a data
-        # loss bug. It makes the backfill resumable: a crash costs one day, not the run.
+        # Safe to advance now since pages arrive in created_date order - a crash costs one day, not the run.
         if total > 0:
             write_watermark(watermark_path, max_seen, default_start)
         if verbose:
