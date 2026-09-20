@@ -21,9 +21,6 @@ catalog, schema = cfg["catalog"], cfg["schema"]
 df = spark.read.table(f"{catalog}.{schema}.bronze_complaints")
 df = build_silver(df)
 
-# Cached: run_quality_checks + the write below would otherwise recompute build_silver() 4x.
-df = df.cache()
-
 checks = run_quality_checks(df, "complaint_id")
 total = checks["total_rows"]
 
@@ -56,5 +53,3 @@ try:
 except Exception:
     df.write.format("delta").saveAsTable(target_table)
     print(f"Created {target_table} with {total} rows")
-
-df.unpersist()

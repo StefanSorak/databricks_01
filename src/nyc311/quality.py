@@ -18,10 +18,18 @@ def freshness_summary(df: DataFrame) -> dict:
 
 
 def run_quality_checks(df: DataFrame, key_col: str = "complaint_id") -> dict:
-    fresh = freshness_summary(df)
+    # One combined aggregation instead of calling the three functions above separately -
+    # serverless compute doesn't support caching, so this avoids 4 full recomputes of
+    # build_silver() for what is otherwise one pass over the data.
+    row = df.agg(
+        F.count("*").alias("total_rows"),
+        F.countDistinct(F.col(key_col)).alias("distinct_keys"),
+        F.count(F.when(~F.col("_duration_valid"), 1)).alias("bounds_violation_count"),
+        F.max("_ingested_at").alias("latest_ingested_at"),
+    ).first()
     return {
-        "duplicate_count": count_duplicates(df, key_col),
-        "bounds_violation_count": count_bounds_violations(df),
-        "latest_ingested_at": fresh["latest_ingested_at"],
-        "total_rows": fresh["total_rows"],
+        "duplicate_count": row["total_rows"] - row["distinct_keys"],
+        "bounds_violation_count": row["bounds_violation_count"],
+        "latest_ingested_at": row["latest_ingested_at"],
+        "total_rows": row["total_rows"],
     }
