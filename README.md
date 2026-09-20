@@ -28,7 +28,7 @@ flowchart TD
     D --> H[("gold_weather_date<br/>BR-3")]
     D --> I[("gold_channel_trends<br/>BR-4")]
 
-    F --> J["Databricks SQL dashboard<br/>(not built yet)"]
+    F --> J["Databricks SQL dashboard<br/>see Dashboard section below"]
     G --> J
     H --> J
     I --> J
