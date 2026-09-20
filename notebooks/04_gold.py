@@ -3,10 +3,6 @@
 # [tool.databricks.environment]
 # environment_version = "5"
 # ///
-dbutils.library.restartPython()
-
-# COMMAND ----------
-
 import sys, os
 sys.path.append(os.path.abspath("../src"))
 
