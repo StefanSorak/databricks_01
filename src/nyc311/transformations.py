@@ -54,10 +54,11 @@ def cast_types(df: DataFrame) -> DataFrame:
 
 
 def normalize_status(df: DataFrame) -> DataFrame:
+    # closed_at wins over the raw status - sampling found "Assigned" rows that were actually closed.
     return df.withColumn(
         "status",
-        F.when(F.col("status").isNotNull(), F.col("status"))
-        .when(F.col("closed_at").isNotNull(), F.lit("Closed"))
+        F.when(F.col("closed_at").isNotNull(), F.lit("Closed"))
+        .when(F.col("status").isNotNull(), F.col("status"))
         .otherwise(F.lit("Open")),
     )
 
@@ -100,13 +101,19 @@ def derive_metrics(df: DataFrame) -> DataFrame:
     )
 
 
-def build_silver(df: DataFrame) -> DataFrame:
+def prepare(df: DataFrame) -> DataFrame:
     return (
         df.transform(select_and_rename)
         .transform(normalize_strings)
         .transform(cast_types)
         .transform(normalize_status)
-        .transform(deduplicate)
-        .transform(validate_bounds)
-        .transform(derive_metrics)
     )
+
+
+def finalize(df: DataFrame) -> DataFrame:
+    # validate_bounds/derive_metrics only add columns, so a count after this is a dedup count too.
+    return df.transform(deduplicate).transform(validate_bounds).transform(derive_metrics)
+
+
+def build_silver(df: DataFrame) -> DataFrame:
+    return finalize(prepare(df))

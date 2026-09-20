@@ -10,7 +10,7 @@ sys.path.append(os.path.abspath("../src"))
 import yaml
 from datetime import datetime, timezone
 from delta.tables import DeltaTable
-from nyc311.transformations import build_silver
+from nyc311.transformations import prepare, finalize
 from nyc311.quality import run_quality_checks
 
 with open("../conf/config.yaml") as f:
@@ -19,9 +19,12 @@ with open("../conf/config.yaml") as f:
 catalog, schema = cfg["catalog"], cfg["schema"]
 
 df = spark.read.table(f"{catalog}.{schema}.bronze_complaints")
-df = build_silver(df)
+df = prepare(df)
+before_dedup = df.count()
+df = finalize(df)
 
 checks = run_quality_checks(df, "complaint_id")
+print(f"deduplicate: {before_dedup - checks['total_rows']} duplicate rows collapsed ({before_dedup} -> {checks['total_rows']})")
 total = checks["total_rows"]
 
 if checks["duplicate_count"]:

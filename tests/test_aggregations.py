@@ -72,6 +72,19 @@ def test_gold_agency_performance_zero_fills_counts_not_medians(spark):
     assert row["median_open_age_hours"] is None  # null, not zero - "no data" != "zero hours"
 
 
+def test_gold_agency_performance_open_only_agency_has_null_month(spark):
+    # an agency/type with no closed complaints ever should have month = null, not join-dropped
+    df = spark.createDataFrame(
+        [silver_row(closed_at=None, response_time_hours=None)], SILVER_SCHEMA,
+    )
+    row = gold_agency_performance(df).first()
+
+    assert row["month"] is None
+    assert row["closed_count"] == 0
+    assert row["median_response_time_hours"] is None
+    assert row["open_count"] == 1
+
+
 def test_gold_borough_metrics_keeps_null_borough(spark):
     df = spark.createDataFrame(
         [silver_row(complaint_id=1, borough=None), silver_row(complaint_id=2, borough="Brooklyn")],

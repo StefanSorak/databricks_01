@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from pyspark.sql.types import StructType, StructField, StringType, TimestampType
 
@@ -10,7 +10,10 @@ from nyc311.transformations import (
     deduplicate,
     validate_bounds,
     derive_metrics,
+    prepare,
+    finalize,
     build_silver,
+    MAX_RESOLUTION_YEARS,
 )
 
 BRONZE_SCHEMA = StructType(
@@ -174,19 +177,21 @@ def silver_row(**overrides):
     return tuple(row[f.name] for f in SILVER_SCHEMA.fields)
 
 
-def test_normalize_status_fills_only_when_null(spark):
+def test_normalize_status_closed_at_overrides_raw_status(spark):
     df = spark.createDataFrame(
         [
             silver_row(complaint_id="1", status=None, closed_at=datetime(2025, 10, 2)),
             silver_row(complaint_id="2", status=None, closed_at=None),
             silver_row(complaint_id="3", status="Assigned", closed_at=datetime(2025, 10, 2)),
+            silver_row(complaint_id="4", status="Assigned", closed_at=None),
         ],
         SILVER_SCHEMA,
     )
     result = normalize_status(df).orderBy("complaint_id")
     statuses = [r["status"] for r in result.collect()]
 
-    assert statuses == ["Closed", "Open", "Assigned"]  # existing non-null status is left alone
+    # closed_at wins even over a stale "Assigned" (row 3); a genuinely-open "Assigned" is untouched (row 4)
+    assert statuses == ["Closed", "Open", "Closed", "Assigned"]
 
 
 def test_deduplicate_keeps_latest_last_updated_at(spark):
@@ -254,6 +259,29 @@ def test_validate_bounds_accepts_plausible_duration(spark):
     assert validate_bounds(df).first()["_duration_valid"] is True
 
 
+def test_validate_bounds_zero_duration_is_valid(spark):
+    ts = datetime(2025, 10, 1, 12, 0, 0)
+    df = spark.createDataFrame([silver_row(created_at=ts, closed_at=ts)], SILVER_SCHEMA)
+    assert validate_bounds(df).first()["_duration_valid"] is True
+
+
+def test_validate_bounds_boundary_at_max_resolution_years(spark):
+    max_seconds = int(MAX_RESOLUTION_YEARS * 365.25 * 24 * 3600)
+    created = datetime(2020, 1, 1, 0, 0, 0)
+
+    at_boundary = spark.createDataFrame(
+        [silver_row(created_at=created, closed_at=created + timedelta(seconds=max_seconds))],
+        SILVER_SCHEMA,
+    )
+    past_boundary = spark.createDataFrame(
+        [silver_row(created_at=created, closed_at=created + timedelta(seconds=max_seconds + 1))],
+        SILVER_SCHEMA,
+    )
+
+    assert validate_bounds(at_boundary).first()["_duration_valid"] is True
+    assert validate_bounds(past_boundary).first()["_duration_valid"] is False
+
+
 def test_derive_metrics_computes_hours_when_valid(spark):
     df = spark.createDataFrame(
         [silver_row(created_at=datetime(2025, 10, 1, 0, 0, 0), closed_at=datetime(2025, 10, 1, 2, 0, 0))],
@@ -292,3 +320,23 @@ def test_build_silver_end_to_end_dedupes_and_derives(spark):
     assert row["complaint_id"] == 1
     assert row["closed_at"] is not None
     assert float(row["response_time_hours"]) == 2.0
+
+
+def test_prepare_finalize_split_matches_build_silver(spark):
+    df = spark.createDataFrame(
+        [bronze_row(unique_key="1"), bronze_row(unique_key="1", _ingested_at=datetime(2025, 12, 1))],
+        BRONZE_SCHEMA,
+    )
+    assert finalize(prepare(df)).count() == build_silver(df).count() == 1
+
+
+def test_finalize_row_count_isolates_dedup_effect(spark):
+    prepared = prepare(spark.createDataFrame(
+        [bronze_row(unique_key="1"), bronze_row(unique_key="1"), bronze_row(unique_key="2")],
+        BRONZE_SCHEMA,
+    ))
+    before = prepared.count()
+    after = finalize(prepared).count()
+
+    assert before == 3
+    assert after == 2  # one duplicate pair collapsed; validate_bounds/derive_metrics don't drop rows
