@@ -1,0 +1,54 @@
+# Documents the "NYC311 Pipeline" Databricks Job as configured in the workspace UI.
+# Not deployed via this file (no Databricks Asset Bundles tooling in this project) -
+# this is a version-controlled record of the job's shape, kept in sync manually.
+resources:
+  jobs:
+    nyc311_pipeline:
+      name: NYC311 Pipeline
+
+      git_source:
+        git_url: https://github.com/StefanSorak/databricks_01
+        git_provider: gitHub
+        git_branch: main
+
+      schedule:
+        quartz_cron_expression: "0 0 9 ? * MON"
+        timezone_id: America/New_York
+        pause_status: UNPAUSED
+
+      email_notifications:
+        on_success:
+          - <your-email>
+        on_failure:
+          - <your-email>
+
+      tasks:
+        - task_key: Setup
+          notebook_task:
+            notebook_path: notebooks/00_setup
+
+        - task_key: Ingest
+          depends_on:
+            - task_key: Setup
+          notebook_task:
+            notebook_path: notebooks/01_ingest
+
+        - task_key: Bronze
+          depends_on:
+            - task_key: Ingest
+          notebook_task:
+            notebook_path: notebooks/02_bronze
+
+        - task_key: Silver
+          depends_on:
+            - task_key: Bronze
+          notebook_task:
+            notebook_path: notebooks/03_silver
+
+        - task_key: Gold
+          depends_on:
+            - task_key: Silver
+          notebook_task:
+            notebook_path: notebooks/04_gold
+
+      # All five tasks run on serverless compute - Free Edition has no classic clusters.

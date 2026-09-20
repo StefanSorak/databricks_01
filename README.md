@@ -175,6 +175,8 @@ src/nyc311/                All real logic: pure, importable, testable functions
   aggregations.py           Gold table builders
   weather.py                Open-Meteo client
   quality.py                BR-5 checks
+tests/                     pytest suite (local SparkSession, no Databricks needed)
+resources/nyc311_job.yaml  Documents the scheduled Databricks Job (not deployed from this file)
 ```
 
 ## Testing
