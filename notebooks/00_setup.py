@@ -1,5 +1,8 @@
 # Databricks notebook source
-
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 import yaml
 
 with open("../conf/config.yaml") as f:

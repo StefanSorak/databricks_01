@@ -3,6 +3,9 @@
 # [tool.databricks.environment]
 # environment_version = "5"
 # ///
+import sys, os
+sys.path.append(os.path.abspath("../src"))
+
 import yaml
 from src.nyc311.api_client import run_ingestion
 
