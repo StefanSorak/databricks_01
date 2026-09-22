@@ -7,7 +7,7 @@ import sys, os
 sys.path.append(os.path.abspath("../src"))
 
 import yaml
-from src.nyc311.api_client import run_ingestion
+from nyc311.api_client import run_ingestion
 
 with open("../conf/config.yaml") as f:
     cfg = yaml.safe_load(f)
